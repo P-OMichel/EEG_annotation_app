@@ -185,20 +185,41 @@ class EEGViewer(QWidget):
         self.dragging_interval_line = None
 
     def on_pick(self, event):
-        rect = event.artist
-        if hasattr(rect, '_annotation_data'):
-            state, start_idx, end_idx = rect._annotation_data
-            reply = QMessageBox.question(self, "Delete Annotation", f"Delete annotation {state} at [{start_idx}, {end_idx}]?",
-                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        artist = event.artist
+
+        # Case 1: Timeline annotation rectangle
+        if isinstance(artist, Rectangle) and hasattr(artist, '_annotation_data'):
+            state, start_idx, end_idx = artist._annotation_data
+            reply = QMessageBox.question(self, "Delete Annotation",
+                                        f"Delete annotation {state} at [{start_idx}, {end_idx}]?",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
                 self.annotations[self.file_name]["states"].remove([state, start_idx, end_idx])
                 with open("annotations.json", "w") as f:
                     json.dump(self.annotations, f, indent=4)
-                rect.remove()
+                artist.remove()
                 for text in self.ax_timeline.texts:
                     if text.get_text() == str(state) and abs(text.get_position()[0] - (start_idx + end_idx) / 2 / self.fs) < 0.1:
                         text.remove()
                 self.canvas.draw()
+
+        # Case 2: Segment label text
+        elif hasattr(artist, '_segment_info'):
+            info = artist._segment_info
+            reply = QMessageBox.question(self, "Delete Interval Label",
+                                        f"Delete interval label '{info['label']}'?",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                try:
+                    self.annotations[self.file_name]["segment label"].remove([
+                        info["segment"], info["selection"], info["label"]
+                    ])
+                    with open("annotations.json", "w") as f:
+                        json.dump(self.annotations, f, indent=4)
+                    self.plot_all()
+                except ValueError:
+                    QMessageBox.warning(self, "Error", "Label not found or already deleted.")
+
 
     def save_annotation(self):
         if self.eeg_data is None or self.file_name is None:
@@ -317,6 +338,31 @@ class EEGViewer(QWidget):
             self.ax_segment_spec.set_title("Segment Spectrogram")
             self.ax_segment_spec.set_xlabel("Time (s)")
             self.ax_segment_spec.set_ylabel("Frequency (Hz)")
+        
+        # === Draw saved segment-level interval labels if they fall inside current segment ===
+        if self.file_name in self.annotations and "segment label" in self.annotations[self.file_name]:
+            for segment_bounds, selection_bounds, label in self.annotations[self.file_name]["segment label"]:
+                seg_start_idx, seg_end_idx = segment_bounds
+                if seg_start_idx == start_idx and seg_end_idx == end_idx:
+                    sel_start_idx, sel_end_idx = selection_bounds
+                    sel_start_time = sel_start_idx / self.fs
+                    sel_end_time = sel_end_idx / self.fs
+
+                    # Draw vertical lines in black
+                    self.ax_segment.axvline(sel_start_time, color='black', linestyle='--', linewidth=2)
+                    self.ax_segment.axvline(sel_end_time, color='black', linestyle='--', linewidth=2)
+
+                    # Draw label text in black and make it clickable
+                    t_center = (sel_start_time + sel_end_time) / 2
+                    label_text = self.ax_segment.text(
+                        t_center, 70, label, color='black', ha='center', va='bottom',
+                        fontsize=10, fontweight='bold', picker=20
+                    )
+                    label_text._segment_info = {
+                        "segment": [seg_start_idx, seg_end_idx],
+                        "selection": [sel_start_idx, sel_end_idx],
+                        "label": label
+                    }
 
         self.canvas.draw()
 

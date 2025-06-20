@@ -142,11 +142,20 @@ class EEGViewer(QWidget):
         self.plot_all()
 
     def on_click(self, event):
-        if event.inaxes == self.ax_full:
+        if self.interval_mode and event.inaxes == self.ax_segment:
+            # Detect if click is near start or end interval line
+            x = event.xdata
+            if self.interval_start_line and abs(x - self.interval_start_line.get_xdata()[0]) < 0.2:
+                self.dragging_interval_line = "start"
+            elif self.interval_end_line and abs(x - self.interval_end_line.get_xdata()[0]) < 0.2:
+                self.dragging_interval_line = "end"
+        elif event.inaxes == self.ax_full:
+            # Handle dragging of window boundaries
             if self.start_line and abs(event.xdata - self.start_time) < 0.5:
                 self.dragging = 'start'
             elif self.end_line and abs(event.xdata - (self.start_time + self.window_size)) < 0.5:
                 self.dragging = 'end'
+
 
     def on_drag(self, event):
         if self.eeg_data is None:
@@ -308,6 +317,23 @@ class EEGViewer(QWidget):
             self.ax_segment_spec.set_title("Segment Spectrogram")
             self.ax_segment_spec.set_xlabel("Time (s)")
             self.ax_segment_spec.set_ylabel("Frequency (Hz)")
+        
+        # === Draw saved segment-level interval labels if they fall inside current segment ===
+        if self.file_name in self.annotations and "segment label" in self.annotations[self.file_name]:
+            for segment_bounds, selection_bounds, label in self.annotations[self.file_name]["segment label"]:
+                seg_start_idx, seg_end_idx = segment_bounds
+                if seg_start_idx == start_idx and seg_end_idx == end_idx:
+                    sel_start_idx, sel_end_idx = selection_bounds
+                    sel_start_time = sel_start_idx / self.fs
+                    sel_end_time = sel_end_idx / self.fs
+
+                    # Draw vertical lines
+                    self.ax_segment.axvline(sel_start_time, color='purple', linestyle='--', linewidth=2)
+                    self.ax_segment.axvline(sel_end_time, color='purple', linestyle='--', linewidth=2)
+
+                    # Add label text centered
+                    t_center = (sel_start_time + sel_end_time) / 2
+                    self.ax_segment.text(t_center, 70, label, color='purple', ha='center', va='bottom', fontsize=10, fontweight='bold')
 
         self.canvas.draw()
 

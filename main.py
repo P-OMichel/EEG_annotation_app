@@ -4,11 +4,10 @@ import os
 import numpy as np
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QLabel,
-    QFileDialog, QHBoxLayout, QSlider, QSpinBox, QComboBox
+    QFileDialog, QHBoxLayout, QSlider, QSpinBox, QComboBox, QMessageBox
 )
 from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from PyQt6.QtWidgets import QMessageBox
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 import matplotlib.cm as cm
@@ -53,7 +52,6 @@ class EEGViewer(QWidget):
         self.slider_layout.addWidget(self.window_slider)
         self.layout.addLayout(self.slider_layout)
 
-        # Annotation selector and save button
         self.annotation_layout = QHBoxLayout()
         self.annotation_selector = QComboBox()
         self.annotation_selector.addItems([str(i) for i in range(21)])
@@ -67,7 +65,7 @@ class EEGViewer(QWidget):
         self.fig = Figure(figsize=(10, 10))
         self.canvas = FigureCanvas(self.fig)
         self.ax_timeline = self.fig.add_subplot(511, frame_on=False)
-        self.ax_timeline.set_position([0.1, 0.88, 0.8, 0.04])  # reduce height
+        self.ax_timeline.set_position([0.1, 0.88, 0.8, 0.04])
         self.ax_timeline.set_yticks([])
         self.ax_timeline.set_ylim(0, 1)
         self.ax_timeline.set_title("Annotation Timeline")
@@ -78,11 +76,24 @@ class EEGViewer(QWidget):
         self.ax_spec.sharex(self.ax_full)
         self.ax_segment = self.fig.add_subplot(413)
         self.ax_segment_spec = self.fig.add_subplot(414)
-        self.fig.subplots_adjust(hspace=0.3)  # reduce vertical spacing
+        self.fig.subplots_adjust(hspace=0.3)
         self.layout.addWidget(self.canvas)
 
+        self.canvas.mpl_connect('button_press_event', self.on_click)
+        self.canvas.mpl_connect('motion_notify_event', self.on_drag)
+        self.canvas.mpl_connect('button_release_event', self.on_release)
+        self.canvas.mpl_connect('pick_event', self.on_pick)
 
-        # Interval annotation area
+        self.start_line = None
+        self.end_line = None
+        self.start_spec_line = None
+        self.end_spec_line = None
+
+        self.interval_start_line = None
+        self.interval_end_line = None
+        self.interval_mode = False
+        self.dragging_interval_line = None
+
         self.interval_layout = QHBoxLayout()
         self.mark_btn = QPushButton("Mark Interval")
         self.mark_btn.clicked.connect(self.start_interval_selection)
@@ -99,27 +110,6 @@ class EEGViewer(QWidget):
         self.interval_layout.addWidget(self.save_interval_btn)
         self.layout.addLayout(self.interval_layout)
 
-        # Variables to hold lines and mode
-        self.interval_start_line = None
-        self.interval_end_line = None
-        self.interval_mode = False
-
-        self.canvas.mpl_connect('button_press_event', self.on_click)
-        self.canvas.mpl_connect('pick_event', self.on_pick)  # for clickable rectangles
-        self.dragging = None
-
-        self.start_line = None
-        self.end_line = None
-        self.start_spec_line = None
-        self.end_spec_line = None
-
-                # if self.file_name in self.annotations:
-                #     for state, start_idx, end_idx in self.annotations[self.file_name]["states"]:
-                #         t_start = start_idx / self.fs
-                #         t_end = end_idx / self.fs
-                #         self.draw_annotation(state, t_start, t_end)
-
-
     def update_fs(self):
         self.fs = self.fs_input.value()
 
@@ -132,52 +122,67 @@ class EEGViewer(QWidget):
             self.window_slider.setMaximum(int(len(self.eeg_data) / self.fs))
             self.window_slider.setValue(30)
 
-            # Load and draw existing annotations
             if os.path.exists("annotations.json"):
                 with open("annotations.json", "r") as f:
                     self.annotations = json.load(f)
-
-                # clear possible previous annotations plot
                 self.ax_timeline.clear()
-
-                # draw existing annotations
                 if self.file_name in self.annotations:
-                    for state, start_idx, end_idx in self.annotations[self.file_name]["states"]:
+                    for state, start_idx, end_idx in self.annotations[self.file_name].get("states", []):
                         t_start = start_idx / self.fs
                         t_end = end_idx / self.fs
                         self.draw_annotation(state, t_start, t_end)
-
             self.plot_all()
 
     def update_sliders(self):
+        if self.eeg_data is None:
+            return
         self.start_time = self.start_slider.value()
-        max_time = len(self.eeg_data) / self.fs if self.eeg_data is not None else float('inf')
+        max_time = len(self.eeg_data) / self.fs
         self.window_size = min(self.window_slider.value(), max_time - self.start_time)
         self.plot_all()
 
     def on_click(self, event):
-        if event.inaxes == self.ax_full:
+        if self.interval_mode and event.inaxes == self.ax_segment:
+            # Detect if click is near start or end interval line
+            x = event.xdata
+            if self.interval_start_line and abs(x - self.interval_start_line.get_xdata()[0]) < 0.2:
+                self.dragging_interval_line = "start"
+            elif self.interval_end_line and abs(x - self.interval_end_line.get_xdata()[0]) < 0.2:
+                self.dragging_interval_line = "end"
+        elif event.inaxes == self.ax_full:
+            # Handle dragging of window boundaries
             if self.start_line and abs(event.xdata - self.start_time) < 0.5:
                 self.dragging = 'start'
             elif self.end_line and abs(event.xdata - (self.start_time + self.window_size)) < 0.5:
                 self.dragging = 'end'
-        self.canvas.mpl_connect('motion_notify_event', self.on_drag)
-        self.canvas.mpl_connect('button_release_event', self.on_release)
+
 
     def on_drag(self, event):
-        if event.inaxes != self.ax_full or self.dragging is None:
+        if self.eeg_data is None:
             return
-        if self.dragging == 'start':
-            new_start = max(0, event.xdata)
-            if new_start + self.window_size <= len(self.eeg_data) / self.fs:
-                self.start_time = new_start
-                self.start_slider.setValue(int(self.start_time))
-        elif self.dragging == 'end':
-            new_end = min(len(self.eeg_data) / self.fs, event.xdata)
-            if new_end > self.start_time:
-                self.window_size = new_end - self.start_time
-                self.window_slider.setValue(int(self.window_size))
-        self.plot_all()
+        if self.interval_mode and event.inaxes in [self.ax_segment]:
+            x = event.xdata
+            if self.dragging_interval_line == "start":
+                self.interval_start_line.set_xdata([x])
+            elif self.dragging_interval_line == "end":
+                self.interval_end_line.set_xdata([x])
+            self.canvas.draw()
+        elif event.inaxes == self.ax_full and hasattr(self, 'dragging') and self.dragging:
+            if self.dragging == 'start':
+                new_start = max(0, event.xdata)
+                if new_start + self.window_size <= len(self.eeg_data) / self.fs:
+                    self.start_time = new_start
+                    self.start_slider.setValue(int(self.start_time))
+            elif self.dragging == 'end':
+                new_end = min(len(self.eeg_data) / self.fs, event.xdata)
+                if new_end > self.start_time:
+                    self.window_size = new_end - self.start_time
+                    self.window_slider.setValue(int(self.window_size))
+            self.plot_all()
+
+    def on_release(self, event):
+        self.dragging = None
+        self.dragging_interval_line = None
 
     def on_pick(self, event):
         rect = event.artist
@@ -190,21 +195,14 @@ class EEGViewer(QWidget):
                 with open("annotations.json", "w") as f:
                     json.dump(self.annotations, f, indent=4)
                 rect.remove()
-                # Remove associated text label
                 for text in self.ax_timeline.texts:
                     if text.get_text() == str(state) and abs(text.get_position()[0] - (start_idx + end_idx) / 2 / self.fs) < 0.1:
                         text.remove()
                 self.canvas.draw()
 
-    def on_release(self, event):
-        self.dragging = None
-
-    
-
     def save_annotation(self):
         if self.eeg_data is None or self.file_name is None:
             return
-
         state = int(self.annotation_selector.currentText())
         start_idx = int(self.start_time * self.fs)
         end_idx = int((self.start_time + self.window_size) * self.fs)
@@ -214,46 +212,77 @@ class EEGViewer(QWidget):
                 self.annotations = json.load(f)
 
         if self.file_name not in self.annotations:
-            self.annotations[self.file_name] = {"states": []}
+            self.annotations[self.file_name] = {"states": [], "segment label": []}
 
-        # Check for overlap
-        existing = self.annotations[self.file_name]["states"]
-        for _, existing_start, existing_end in existing:
+        for _, existing_start, existing_end in self.annotations[self.file_name]["states"]:
             if not (end_idx <= existing_start or start_idx >= existing_end):
                 QMessageBox.warning(self, "Overlap Detected", "This annotation overlaps with an existing one and will not be saved.")
                 return
 
         self.annotations[self.file_name]["states"].append([state, start_idx, end_idx])
-
         with open("annotations.json", "w") as f:
             json.dump(self.annotations, f, indent=4)
-
         self.draw_annotation(state, self.start_time, self.start_time + self.window_size)
-
         self.canvas.draw()
 
     def draw_annotation(self, state, t_start, t_end):
-        color = (1, 0, 0, 0.3) if state == 0 else (0, 1, 0, 0.3) if state == 10 else (0, 0, 1, 0.3)
-        if state not in [0, 10, 20]:
-            cmap = plt.get_cmap("coolwarm")
-            color = cmap(state / 20)
-            color = (*color[:3], 0.3)
-
+        cmap = plt.get_cmap("tab20", 21)
+        color = cmap(state)
+        color = (*color[:3], 0.3)
         rect = Rectangle((t_start, 0), t_end - t_start, 1, color=color)
         rect.set_picker(True)
         rect._annotation_data = [state, int(t_start * self.fs), int(t_end * self.fs)]
         self.ax_timeline.add_patch(rect)
-        self.ax_timeline.text((t_start + t_end) / 2, 0.5, str(state), ha='center', va='center', fontsize=8, color='black')
+        self.ax_timeline.text((t_start + t_end) / 2, 0.5 + 0.1 * (state % 3), str(state), ha='center', va='center', fontsize=8, color='black')
+
+    def start_interval_selection(self):
+        self.interval_mode = True
+        start = self.start_time + self.window_size / 3
+        end = self.start_time + 2 * self.window_size / 3
+        for ax in [self.ax_segment]:
+            self.interval_start_line = ax.axvline(start, color='purple', linestyle='--', linewidth=2)
+            self.interval_end_line = ax.axvline(end, color='purple', linestyle='--', linewidth=2)
+        self.canvas.draw()
+
+    def save_interval(self):
+        if self.eeg_data is None or self.file_name is None:
+            return
+        if not self.interval_start_line or not self.interval_end_line:
+            QMessageBox.warning(self, "No Interval", "Please mark an interval first.")
+            return
+        selection_start = min(self.interval_start_line.get_xdata()[0], self.interval_end_line.get_xdata()[0])
+        selection_end = max(self.interval_start_line.get_xdata()[0], self.interval_end_line.get_xdata()[0])
+        label = self.interval_label_selector.currentText()
+        segment_start_idx = int(self.start_time * self.fs)
+        segment_end_idx = int((self.start_time + self.window_size) * self.fs)
+        selection_start_idx = int(selection_start * self.fs)
+        selection_end_idx = int(selection_end * self.fs)
+
+        if os.path.exists("annotations.json"):
+            with open("annotations.json", "r") as f:
+                self.annotations = json.load(f)
+
+        if self.file_name not in self.annotations:
+            self.annotations[self.file_name] = {"states": [], "segment label": []}
+        elif "segment label" not in self.annotations[self.file_name]:
+            self.annotations[self.file_name]["segment label"] = []
+
+        self.annotations[self.file_name]["segment label"].append(
+            [[segment_start_idx, segment_end_idx], [selection_start_idx, selection_end_idx], label]
+        )
+
+        with open("annotations.json", "w") as f:
+            json.dump(self.annotations, f, indent=4)
+
+        QMessageBox.information(self, "Saved", f"Saved interval '{label}'\nSegment: {segment_start_idx}-{segment_end_idx}\nSelection: {selection_start_idx}-{selection_end_idx}")
 
     def plot_all(self):
         if self.eeg_data is None:
             return
-
         self.ax_full.clear()
         self.ax_spec.clear()
         self.ax_segment.clear()
         self.ax_segment_spec.clear()
-        self.annotation_rects = []
 
         t = np.arange(len(self.eeg_data)) / self.fs
 
@@ -266,7 +295,7 @@ class EEGViewer(QWidget):
         self.ax_full.set_xlabel("Time (s)")
         self.ax_full.set_ylabel("Amplitude")
 
-        Pxx, freqs, bins, im = self.ax_spec.specgram(self.eeg_data, Fs=self.fs, cmap='rainbow')
+        self.ax_spec.specgram(self.eeg_data, Fs=self.fs, cmap='rainbow')
         self.start_spec_line = self.ax_spec.axvline(self.start_time, color='red', linestyle='--')
         self.end_spec_line = self.ax_spec.axvline(self.start_time + self.window_size, color='red', linestyle='--')
         self.ax_spec.set_title("Spectrogram")
@@ -289,25 +318,6 @@ class EEGViewer(QWidget):
             self.ax_segment_spec.set_xlabel("Time (s)")
             self.ax_segment_spec.set_ylabel("Frequency (Hz)")
 
-        self.canvas.draw()
-
-    def start_interval_selection(self):
-        self.interval_mode = True
-        start = self.start_time + self.window_size / 3
-        end = self.start_time + 2 * self.window_size / 3
-
-        for ax in [self.ax_segment, self.ax_segment_spec]:
-            if self.interval_start_line:
-                self.interval_start_line.remove()
-            if self.interval_end_line:
-                self.interval_end_line.remove()
-
-            self.interval_start_line = ax.axvline(start, color='purple', linestyle='--', linewidth=2)
-            self.interval_end_line = ax.axvline(end, color='purple', linestyle='--', linewidth=2)
-
-        self.canvas.mpl_connect('motion_notify_event', self.on_interval_drag)
-        self.canvas.mpl_connect('button_release_event', self.on_interval_release)
-        self.dragging_interval_line = None
         self.canvas.draw()
 
 if __name__ == '__main__':
