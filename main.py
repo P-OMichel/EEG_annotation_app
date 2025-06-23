@@ -12,6 +12,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+from Functions.time_frequency import spectrogram
 
 class EEGViewer(QWidget):
     def __init__(self):
@@ -54,7 +55,7 @@ class EEGViewer(QWidget):
 
         self.annotation_layout = QHBoxLayout()
         self.annotation_selector = QComboBox()
-        self.annotation_selector.addItems([str(i) for i in range(21)])
+        self.annotation_selector.addItems([str(i) for i in range(22)])
         self.save_btn = QPushButton("Save Annotation")
         self.save_btn.clicked.connect(self.save_annotation)
         self.annotation_layout.addWidget(QLabel("State:"))
@@ -62,10 +63,10 @@ class EEGViewer(QWidget):
         self.annotation_layout.addWidget(self.save_btn)
         self.layout.addLayout(self.annotation_layout)
 
-        self.fig = Figure(figsize=(10, 10))
+        self.fig = Figure(figsize=(15, 20))
         self.canvas = FigureCanvas(self.fig)
         self.ax_timeline = self.fig.add_subplot(511, frame_on=False)
-        self.ax_timeline.set_position([0.1, 0.88, 0.8, 0.04])
+        #self.ax_timeline.set_position([0.1, 0.1, 0.8, 0.04])
         self.ax_timeline.set_yticks([])
         self.ax_timeline.set_ylim(0, 1)
         self.ax_timeline.set_title("Annotation Timeline")
@@ -99,7 +100,7 @@ class EEGViewer(QWidget):
         self.mark_btn.clicked.connect(self.start_interval_selection)
 
         self.interval_label_selector = QComboBox()
-        self.interval_label_selector.addItems(["IES", "Burst", "alpha-supp"])
+        self.interval_label_selector.addItems(["IES", "Burst", "alpha-supp", "Eye artifacts", "Large artefacts", "HF artifacts", "Ground check"])
 
         self.save_interval_btn = QPushButton("Save Interval")
         self.save_interval_btn.clicked.connect(self.save_interval)
@@ -109,6 +110,8 @@ class EEGViewer(QWidget):
         self.interval_layout.addWidget(self.interval_label_selector)
         self.interval_layout.addWidget(self.save_interval_btn)
         self.layout.addLayout(self.interval_layout)
+
+        self.fig.tight_layout()
 
     def update_fs(self):
         self.fs = self.fs_input.value()
@@ -185,20 +188,41 @@ class EEGViewer(QWidget):
         self.dragging_interval_line = None
 
     def on_pick(self, event):
-        rect = event.artist
-        if hasattr(rect, '_annotation_data'):
-            state, start_idx, end_idx = rect._annotation_data
-            reply = QMessageBox.question(self, "Delete Annotation", f"Delete annotation {state} at [{start_idx}, {end_idx}]?",
-                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        artist = event.artist
+
+        # Case 1: Timeline annotation rectangle
+        if isinstance(artist, Rectangle) and hasattr(artist, '_annotation_data'):
+            state, start_idx, end_idx = artist._annotation_data
+            reply = QMessageBox.question(self, "Delete Annotation",
+                                        f"Delete annotation {state} at [{start_idx}, {end_idx}]?",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
                 self.annotations[self.file_name]["states"].remove([state, start_idx, end_idx])
                 with open("annotations.json", "w") as f:
                     json.dump(self.annotations, f, indent=4)
-                rect.remove()
+                artist.remove()
                 for text in self.ax_timeline.texts:
                     if text.get_text() == str(state) and abs(text.get_position()[0] - (start_idx + end_idx) / 2 / self.fs) < 0.1:
                         text.remove()
                 self.canvas.draw()
+
+        # Case 2: Segment label text
+        elif hasattr(artist, '_segment_info'):
+            info = artist._segment_info
+            reply = QMessageBox.question(self, "Delete Interval Label",
+                                        f"Delete interval label '{info['label']}'?",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                try:
+                    self.annotations[self.file_name]["segment label"].remove([
+                        info["segment"], info["selection"], info["label"]
+                    ])
+                    with open("annotations.json", "w") as f:
+                        json.dump(self.annotations, f, indent=4)
+                    self.plot_all()
+                except ValueError:
+                    QMessageBox.warning(self, "Error", "Label not found or already deleted.")
+
 
     def save_annotation(self):
         if self.eeg_data is None or self.file_name is None:
@@ -295,7 +319,11 @@ class EEGViewer(QWidget):
         self.ax_full.set_xlabel("Time (s)")
         self.ax_full.set_ylabel("Amplitude")
 
-        self.ax_spec.specgram(self.eeg_data, Fs=self.fs, cmap='rainbow')
+
+        #--- compute spectrogram 
+        t_spectro, f_spectro, spectro = spectrogram(self.eeg_data, self.fs)
+        self.ax_spec.pcolormesh(t_spectro, f_spectro, np.log(spectro + 0.000001), shading = 'nearest', cmap='rainbow', vmin = np.log(0.001), vmax = np.log(20))
+        #self.ax_spec.specgram(self.eeg_data, Fs=self.fs, NFFT= self.fs, noverlap=self.fs - 16, cmap='rainbow', vmin = 0.00000001, vmax = 1)
         self.start_spec_line = self.ax_spec.axvline(self.start_time, color='red', linestyle='--')
         self.end_spec_line = self.ax_spec.axvline(self.start_time + self.window_size, color='red', linestyle='--')
         self.ax_spec.set_title("Spectrogram")
@@ -313,10 +341,38 @@ class EEGViewer(QWidget):
         self.ax_segment.set_ylabel("Amplitude")
 
         if len(segment) > 0:
-            self.ax_segment_spec.specgram(segment, Fs=self.fs, cmap='viridis')
+            #--- compute spectrogrqm
+            t_spectro_segment, f_spectro_segment, spectro_segment = spectrogram(segment, self.fs)
+            self.ax_segment_spec.pcolormesh(t_spectro_segment, f_spectro_segment, np.log(spectro_segment + 0.000001), shading = 'nearest', cmap='rainbow', vmin = np.log(0.001), vmax = np.log(20))
+            #self.ax_segment_spec.specgram(segment, Fs=self.fs, cmap='rainbow', vmin = np.log10(0.00001), vmax = np.log10(20))
             self.ax_segment_spec.set_title("Segment Spectrogram")
             self.ax_segment_spec.set_xlabel("Time (s)")
             self.ax_segment_spec.set_ylabel("Frequency (Hz)")
+        
+        # === Draw saved segment-level interval labels if they fall inside current segment ===
+        if self.file_name in self.annotations and "segment label" in self.annotations[self.file_name]:
+            for segment_bounds, selection_bounds, label in self.annotations[self.file_name]["segment label"]:
+                seg_start_idx, seg_end_idx = segment_bounds
+                if seg_start_idx == start_idx and seg_end_idx == end_idx:
+                    sel_start_idx, sel_end_idx = selection_bounds
+                    sel_start_time = sel_start_idx / self.fs
+                    sel_end_time = sel_end_idx / self.fs
+
+                    # Draw vertical lines in black
+                    self.ax_segment.axvline(sel_start_time, color='black', linestyle='--', linewidth=2)
+                    self.ax_segment.axvline(sel_end_time, color='black', linestyle='--', linewidth=2)
+
+                    # Draw label text in black and make it clickable
+                    t_center = (sel_start_time + sel_end_time) / 2
+                    label_text = self.ax_segment.text(
+                        t_center, 70, label, color='black', ha='center', va='bottom',
+                        fontsize=10, fontweight='bold', picker=20
+                    )
+                    label_text._segment_info = {
+                        "segment": [seg_start_idx, seg_end_idx],
+                        "selection": [sel_start_idx, sel_end_idx],
+                        "label": label
+                    }
 
         self.canvas.draw()
 
