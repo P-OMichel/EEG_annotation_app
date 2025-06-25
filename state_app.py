@@ -138,7 +138,7 @@ class EEGViewer(QMainWindow):
             p.scene().sigMouseMoved.connect(lambda evt, idx=i, plot=p: self.mouse_moved(evt, idx, plot))
             self.layout.addWidget(p)
 
-        for i in range(1, 4):
+        for i in range(1,4):
             self.plots[i].setXLink(self.plots[0])
 
         self.plots[3].setYRange(-0.5, 21.5)
@@ -265,7 +265,7 @@ class EEGViewer(QMainWindow):
         self.plots[0].setLogMode(y=True)
         self.plots[0].addLegend()
         for i in range(self.N_labels):
-            self.plots[0].plot(self.C.t_list, self.C.P_signals[i, :], pen=pg.mkPen(self.colors[i]), name = self.labels_power[i])
+            self.plots[0].plot(self.C.t_list, self.C.P_signals[i, :], pen=pg.mkPen(self.colors[i], width=2), name = self.labels_power[i])
         self.plots[0].setTitle("Power of the different waves")
         self.plots[1].setYRange(-3, 3)
 
@@ -274,13 +274,13 @@ class EEGViewer(QMainWindow):
         self.plots[1].setLogMode(y=True)
         self.plots[1].addLegend()
         for i in range(self.N_labels):
-            self.plots[1].plot(self.C.t_list, self.C.prop_P_signals[i, :], pen=pg.mkPen(self.colors[i]), name = self.labels_power_proportion[i])
+            self.plots[1].plot(self.C.t_list, self.C.prop_P_signals[i, :], pen=pg.mkPen(self.colors[i], width=2), name = self.labels_power_proportion[i])
         self.plots[1].setTitle("Power proportion of the different waves")
         self.plots[1].setYRange(-5, 0.1)
 
     def display_supp(self):
         self.plots[2].clear()
-        self.plots[2].plot(self.C.t_list, self.C.supp)
+        self.plots[2].plot(self.C.t_list, self.C.supp, pen=pg.mkPen(width=2))
         self.plots[2].setTitle("Suppression ratio")
         self.plots[2].setYRange(-0.1, 2.1)
 
@@ -321,18 +321,22 @@ class EEGViewer(QMainWindow):
     def toggle_view(self):
         self.showing_original = not self.showing_original
 
-        print('showing original', self.showing_original)
+        # Step 1: Save current x-axis range from the first plot (which is the master for X linking)
+        current_x_range = self.plots[0].getViewBox().viewRange()[0]  # [xmin, xmax]
 
+        # Step 2: Update the plots
         if self.showing_original:
             self.display_signal()
             self.display_spectrogram()
             self.display_state()
         else:
             self.display_power()
-
             self.display_power_proportions()
-
             self.display_supp()
+
+        # Step 3: Restore x-axis range
+        for p in self.plots:
+            p.setXRange(*current_x_range, padding=0)
     
     #-------------------------------------------------------#
     #------- save to .npy Dict the edited state list -------#
