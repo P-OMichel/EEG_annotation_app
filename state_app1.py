@@ -171,25 +171,25 @@ class EEGViewer(QMainWindow):
         spec_ctrl = QHBoxLayout()
 
         self.vmin_input = QSpinBox()
-        self.vmin_input.setRange(-200, 0)  # log-scale input
-        self.vmin_input.setValue(-70)
-        self.vmin_input.setPrefix("vmin: ")
+        self.vmin_input.setRange(10, 10000)  # log-scale input
+        self.vmin_input.setValue(1000)
+        self.vmin_input.setPrefix("vmin  | log(1/val): ")
         spec_ctrl.addWidget(self.vmin_input)
 
         self.vmax_input = QSpinBox()
-        self.vmax_input.setRange(-200, 100)
-        self.vmax_input.setValue(0)
-        self.vmax_input.setPrefix("vmax: ")
+        self.vmax_input.setRange(1, 1000)
+        self.vmax_input.setValue(20)
+        self.vmax_input.setPrefix("vmax | log(val): ")
         spec_ctrl.addWidget(self.vmax_input)
 
         self.delta_f_input = QSpinBox()
-        self.delta_f_input.setRange(1, 100)
-        self.delta_f_input.setValue(30)  # matches your `30 * fs` above
-        self.delta_f_input.setPrefix("Δf: ")
+        self.delta_f_input.setRange(1, 20)
+        self.delta_f_input.setValue(2)  
+        self.delta_f_input.setPrefix("Δf | val/10: ")
         spec_ctrl.addWidget(self.delta_f_input)
 
         self.apply_spec_btn = QPushButton("Update Spectrogram")
-        self.apply_spec_btn.clicked.connect(self.update_spectrogram)
+        self.apply_spec_btn.clicked.connect(self.display_spectrogram)
         spec_ctrl.addWidget(self.apply_spec_btn)
 
         self.layout.addLayout(spec_ctrl)
@@ -240,7 +240,7 @@ class EEGViewer(QMainWindow):
     def display_spectrogram(self):
         self.plots[1].clear()
         self.plots[1].setLogMode(y=False)
-        t, f, Sxx = spectrogram(self.data, self.fs, 0.2)
+        t, f, Sxx = spectrogram(self.data, self.fs, self.delta_f_input.value()/10)
         img = pg.ImageItem(np.log(Sxx.T + 0.0000001))
 
         # Apply custom colormap
@@ -248,7 +248,7 @@ class EEGViewer(QMainWindow):
         lut = (cmap(np.linspace(0, 1, 256))[:, :3] * 255).astype(np.uint8)
         img.setLookupTable(lut)
         # fix range for values
-        img.setLevels([np.log(0.001), np.log(100)])
+        img.setLevels([np.log(1/self.vmin_input.value()), np.log(self.vmax_input.value())])
 
         img.setRect(pg.QtCore.QRectF(t[0], f[0], t[-1] - t[0], f[-1] - f[0]))
         self.plots[1].addItem(img)

@@ -86,16 +86,16 @@ def get_state_0_20(supp, prop_list):
     elif main_state == 2:
 
 
-        if prop_delta >= 0.8: 
+        if prop_delta >= 0.9: 
             state = 6
-        elif prop_delta >= 0.6:
+        elif prop_delta >= 0.75:
             if prop_alpha >= 0.3:
                 state = 8
             else:
                 state = 7
-        elif prop_delta >= 0.5:
+        elif prop_delta >= 0.6:
             state = 8         
-        elif prop_delta >= 0.4:
+        elif prop_delta >= 0.5:
             state = 9
         elif prop_delta >= 0.25:
             state = 10
