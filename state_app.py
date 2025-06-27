@@ -167,33 +167,6 @@ class EEGViewer(QMainWindow):
         self.N_labels = len(self.labels_power)
         self.colors = ['blue', 'red', 'orange', 'green']
 
-        # Spectrogram control inputs
-        spec_ctrl = QHBoxLayout()
-
-        self.vmin_input = QSpinBox()
-        self.vmin_input.setRange(-200, 0)  # log-scale input
-        self.vmin_input.setValue(-70)
-        self.vmin_input.setPrefix("vmin: ")
-        spec_ctrl.addWidget(self.vmin_input)
-
-        self.vmax_input = QSpinBox()
-        self.vmax_input.setRange(-200, 100)
-        self.vmax_input.setValue(0)
-        self.vmax_input.setPrefix("vmax: ")
-        spec_ctrl.addWidget(self.vmax_input)
-
-        self.delta_f_input = QSpinBox()
-        self.delta_f_input.setRange(1, 100)
-        self.delta_f_input.setValue(30)  # matches your `30 * fs` above
-        self.delta_f_input.setPrefix("Δf: ")
-        spec_ctrl.addWidget(self.delta_f_input)
-
-        self.apply_spec_btn = QPushButton("Update Spectrogram")
-        self.apply_spec_btn.clicked.connect(self.update_spectrogram)
-        spec_ctrl.addWidget(self.apply_spec_btn)
-
-        self.layout.addLayout(spec_ctrl)
-
         # initialize compute object
         self.C = Compute()
 
