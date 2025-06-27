@@ -2,6 +2,7 @@ import numpy as np
 import scipy as sc
 import json
 from scipy.signal import resample_poly
+from pathlib import Path
 
 def resample_signal(signal, original_rate=250, target_rate=128):
     """
@@ -88,4 +89,13 @@ for filename in os.listdir(folder_path):
 
     name = folder_path + filename
 
-    convert(name)
+    # check if file already exists
+    current_path = Path('recordings_npy/' + filename.split('.')[0] + '.npy')
+    if current_path.exists():
+        print('file: ', current_path, ' already exists')
+
+    else:
+        try:
+            convert(name)
+        except:
+            print('Error with file: ', name)
