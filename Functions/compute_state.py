@@ -88,14 +88,14 @@ def get_state_0_20(supp, prop_list):
 
         if prop_delta >= 0.9: 
             state = 6
-        elif prop_delta >= 0.75:
+        elif prop_delta >= 0.85:
             if prop_alpha >= 0.3:
                 state = 8
             else:
                 state = 7
-        elif prop_delta >= 0.6:
+        elif prop_delta >= 0.8:
             state = 8         
-        elif prop_delta >= 0.5:
+        elif prop_delta >= 0.7:
             state = 9
         elif prop_delta >= 0.5 and prop_alpha >= 0.1:
             state = 10
