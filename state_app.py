@@ -153,13 +153,24 @@ class EEGViewer(QMainWindow):
         # folder to save updated state file
         self.save_folder = 'data_state_annotation/'
 
-        # variables for changing dispaly of plots
-        self.showing_original = True  # flag for plot toggle
-        self.toggle_button = QPushButton("Toggle View")
+        # label for visualization of plot values
         self.coord_label = QLabel("Cursor: (X, Y)")
         self.layout.addWidget(self.coord_label)
-        self.toggle_button.clicked.connect(self.toggle_view)
-        self.layout.addWidget(self.toggle_button)
+
+        # variables for changing dispaly of plots
+        display_btn_widget = QWidget()
+        display_btn_layout = QHBoxLayout()
+        display_btn_widget.setLayout(display_btn_layout)
+        self.view0_btn = QPushButton("View 0")
+        self.view1_btn = QPushButton("View 1")
+        self.view2_btn = QPushButton("View 2")
+        display_btn_layout.addWidget(self.view0_btn)
+        display_btn_layout.addWidget(self.view1_btn)
+        display_btn_layout.addWidget(self.view2_btn)
+        self.view0_btn.clicked.connect(self.plot_spectro_page)
+        self.view1_btn.clicked.connect(self.plot_prop_page)
+        self.view2_btn.clicked.connect(self.plot_freq_page)
+        self.layout.addWidget(display_btn_widget)
 
         # labels for plot
         self.labels_power = ['P<sub>δ$', 'P<sub>α', 'P<sub>β', 'P<sub>γ']
@@ -194,6 +205,9 @@ class EEGViewer(QMainWindow):
 
         self.layout.addLayout(spec_ctrl)
 
+        # marker to identify which plot to display
+        self.plot_id = None
+
         # initialize compute object
         self.C = Compute()
 
@@ -216,14 +230,13 @@ class EEGViewer(QMainWindow):
         t = np.arange(len(self.data)) / self.fs
 
         #--- send data to compute object
-        self.C.get_data(t, self.data, self.fs, 30 * self.fs, 10 *self.fs)
+        self.C.get_data(t, self.data, self.fs, 30 * self.fs, 10 *self.fs, 30 * self.fs, 10 * self.fs)
         #--- run to get all variables
         self.C.run()
         #--- call to plot the data 
         self.update_all()
 
     def update_all(self):
-        self.showing_original = True
         self.display_signal()
         self.display_spectrogram()
         self.display_state()
@@ -255,6 +268,7 @@ class EEGViewer(QMainWindow):
         self.plots[1].setTitle("Spectrogram")
         self.plots[1].setLabel('left', 'Freq (Hz)')
         self.plots[1].setLabel('bottom', 'Time (s)')
+        self.plots[1].setYRange(f[0], f[-1])
 
     def display_state(self):
         self.plots[2].clear()
@@ -310,6 +324,26 @@ class EEGViewer(QMainWindow):
         self.plots[2].setTitle("Suppression ratio")
         self.plots[2].setYRange(-0.1, 2.1)
 
+    def display_be_entropy(self):
+        self.plots[0].clear()
+        self.plots[0].addLegend()
+        self.plots[0].plot(self.C.t_list, self.C.be, pen=pg.mkPen(width=2), name = 'Block Entropy (k = 2)')
+        self.plots[0].plot(self.C.t_list, self.C.entropy, pen=pg.mkPen(width=2), name = 'Entropy')
+        self.plots[0].setTitle("Entropy and block entropy of signal")
+        self.plots[0].setYRange(0, 10)
+
+    def display_line_length(self):
+        self.plots[1].clear()
+        self.plots[1].plot(self.C.t_line_length, self.C.line_length, pen=pg.mkPen(width=2))
+        self.plots[1].setTitle("Line length of signal")
+
+    def display_freqs_quantiles(self):
+        self.plots[2].clear()
+        for i in range(np.shape(self.C.freqs_quantiles)[0]):
+            self.plots[2].plot(self.C.t_list, self.C.freqs_quantiles[i, :], pen=pg.mkPen(self.colors[i], width=2))
+        self.plots[2].setTitle("Frequencies associated to quantiles")
+        self.plots[2].setYRange(0, 30)
+
     #-----------------------------------------------------------#
     #---- methods to update the point(s) of the state chart ----#
     #-----------------------------------------------------------#
@@ -344,21 +378,36 @@ class EEGViewer(QMainWindow):
     #-------------------------------------------------------#
     #-------- method to switch between plot display --------#
     #-------------------------------------------------------#
+    def plot_spectro_page(self):
+        self.plot_id = 'spectro'
+        self.toggle_view()
+
+    def plot_prop_page(self):
+        self.plot_id = 'prop'
+        self.toggle_view()
+
+    def plot_freq_page(self):
+        self.plot_id = 'freq'
+        self.toggle_view()
+
     def toggle_view(self):
-        self.showing_original = not self.showing_original
 
         # Step 1: Save current x-axis range from the first plot (which is the master for X linking)
         current_x_range = self.plots[0].getViewBox().viewRange()[0]  # [xmin, xmax]
 
         # Step 2: Update the plots
-        if self.showing_original:
+        if self.plot_id == 'spectro':
             self.display_signal()
             self.display_spectrogram()
             self.display_state()
-        else:
+        elif self.plot_id == 'prop':
             self.display_power()
             self.display_power_proportions()
             self.display_supp()
+        elif self.plot_id == 'freq':
+            self.display_be_entropy()
+            self.display_line_length()
+            self.display_freqs_quantiles()
 
         # Step 3: Restore x-axis range
         for p in self.plots:

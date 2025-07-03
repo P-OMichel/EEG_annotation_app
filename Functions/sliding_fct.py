@@ -3,7 +3,14 @@ Functions computed on sliding windows with a specific window size and step in be
 '''
 import numpy as np
 from Functions.suppressions import detect_suppressions_power
+from scipy.stats import entropy
+from collections import Counter
+from Functions.metrics import line_length, freqs_quantiles
 
+
+#-------------------------------------------------------------------------------------------#
+#                                 Power of signal                                           #
+#-------------------------------------------------------------------------------------------#
 
 def power_1D(signal,t,Ws,step):
     '''
@@ -35,6 +42,11 @@ def power_nD(signals,t,Ws,step):
 
     return t_list, mean_power_list
 
+
+#-------------------------------------------------------------------------------------------#
+#                                 Fragmentation                                           #
+#-------------------------------------------------------------------------------------------#
+
 def supp_power(y,Ws,step,fs,T_IES_max,T_alpha_max):
 
     windows=[y[i:i+Ws] for i in range(0,len(y)-Ws,step)]
@@ -61,6 +73,79 @@ def supp_power_prop(y,t,Ws,step,fs):
 
     return t_list, np.array(IES_prop), np.array(alpha_supp_prop)
 
+
+#-------------------------------------------------------------------------------------------#
+#                                      Entropy                                              #
+#-------------------------------------------------------------------------------------------#
+
+def compute_entropy(signal, t, window_size, step, n_bins=10, normalize=True):
+    entropies = []
+    for i in range(0, len(signal) - window_size + 1, step):
+        window = signal[i:i+window_size]
+        if normalize:
+            window = (window - np.mean(window)) / np.std(window)  # z-score
+        # Discretize
+        hist, _ = np.histogram(window, bins=n_bins, density=True)
+        hist = hist[hist > 0]  # remove 0 entries
+        ent = entropy(hist, base=2)
+        entropies.append(ent)
+
+    t_list=[t[window_size+i*step] for i in range(len(entropies))]
+
+    return t_list, np.array(entropies)
+
+def compute_block_entropy_k(signal, t, window_size, step, k=2, n_bins=10, normalize=True):
+    entropies = []
+    for i in range(0, len(signal) - window_size + 1, step):
+        window = signal[i:i+window_size]
+        if normalize:
+            window = (window - np.mean(window)) / (np.std(window) + 1e-8)
+        
+        # Discretize
+        quantized = np.digitize(window, np.histogram_bin_edges(window, bins=n_bins))
+        
+        # Create k-grams
+        kgrams = [tuple(quantized[j:j+k]) for j in range(len(quantized) - k + 1)]
+        freqs = Counter(kgrams)
+        total = sum(freqs.values())
+        probs = np.array([count / total for count in freqs.values()])
+        
+        # Shannon entropy of the k-grams
+        ent = -np.sum(probs * np.log2(probs))
+        entropies.append(ent)
+
+    t_list=[t[window_size+i*step] for i in range(len(entropies))]
+    
+    return t_list, np.array(entropies)
+
+#-------------------------------------------------------------------------------------------#
+#                                      Regularity                                           #
+#-------------------------------------------------------------------------------------------#
+
+def compute_line_length(signal, t, Ws, step):
+    # create a list of all the sliding windows
+    windows=[signal[i:i+Ws] for i in range(0,len(signal)-Ws,step)]
+    # compute the line length in each window
+    line_length_list=np.array([line_length(win) for win in windows])
+    # associated time list (time bin is for the end of a window)
+    t_list=[t[Ws+i*step] for i in range(len(windows))]
+
+    return t_list, line_length_list
+
+
+#-------------------------------------------------------------------------------------------#
+#                                   frequency quantile                                      #
+#-------------------------------------------------------------------------------------------#
+
+def compute_freqs_quantiles(signal, t, Ws, step, sampling_rate, quantiles=[0.5, 0.75, 0.85, 0.95], nperseg=None):
+    # create a list of all the sliding windows
+    windows=[signal[i:i+Ws] for i in range(0,len(signal)-Ws,step)]
+    # compute the line length in each window
+    freqs_list=np.array([freqs_quantiles(win, sampling_rate, quantiles, nperseg) for win in windows])
+    # associated time list (time bin is for the end of a window)
+    t_list=[t[Ws+i*step] for i in range(len(windows))]
+
+    return t_list, np.transpose(freqs_list)
 
 
 
