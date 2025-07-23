@@ -11,6 +11,7 @@ import pyqtgraph as pg
 from matplotlib import cm
 from state_annotation.compute import Compute
 from pathlib import Path
+from scipy.signal import savgol_filter
 
 class RubberbandPlot(pg.PlotWidget):
     def __init__(self, viewer):
@@ -305,7 +306,7 @@ class EEGViewer(QMainWindow):
         self.plots[0].setLogMode(y=True)
         self.plots[0].addLegend()
         for i in range(self.N_labels):
-            self.plots[0].plot(self.C.t_list, self.C.P_signals[i, :], pen=pg.mkPen(self.colors[i], width=2), name = self.labels_power[i])
+            self.plots[0].plot(self.C.t_list, savgol_filter(self.C.P_signals[i, :], 3, 1), pen=pg.mkPen(self.colors[i], width=2), name = self.labels_power[i])
         self.plots[0].setTitle("Power of the different waves")
         self.plots[1].setYRange(-3, 3)
 
@@ -314,7 +315,7 @@ class EEGViewer(QMainWindow):
         self.plots[1].setLogMode(y=True)
         self.plots[1].addLegend()
         for i in range(self.N_labels):
-            self.plots[1].plot(self.C.t_list, self.C.prop_P_signals[i, :], pen=pg.mkPen(self.colors[i], width=2), name = self.labels_power_proportion[i])
+            self.plots[1].plot(self.C.t_list, savgol_filter(self.C.prop_P_signals[i, :],3,1), pen=pg.mkPen(self.colors[i], width=2), name = self.labels_power_proportion[i])
         self.plots[1].setTitle("Power proportion of the different waves")
         self.plots[1].setYRange(-5, 0.1)
 
@@ -327,20 +328,20 @@ class EEGViewer(QMainWindow):
     def display_be_entropy(self):
         self.plots[0].clear()
         self.plots[0].addLegend()
-        self.plots[0].plot(self.C.t_list, self.C.be, pen=pg.mkPen(width=2), name = 'Block Entropy (k = 2)')
-        self.plots[0].plot(self.C.t_list, self.C.entropy, pen=pg.mkPen(width=2), name = 'Entropy')
+        self.plots[0].plot(self.C.t_list, savgol_filter(self.C.be,3,1), pen=pg.mkPen(width=2), name = 'Block Entropy (k = 2)')
+        self.plots[0].plot(self.C.t_list, savgol_filter(self.C.entropy,3,1), pen=pg.mkPen(width=2), name = 'Entropy')
         self.plots[0].setTitle("Entropy and block entropy of signal")
         self.plots[0].setYRange(0, 10)
 
     def display_line_length(self):
         self.plots[1].clear()
-        self.plots[1].plot(self.C.t_line_length, self.C.line_length, pen=pg.mkPen(width=2))
+        self.plots[1].plot(self.C.t_line_length, savgol_filter(self.C.line_length,3,1), pen=pg.mkPen(width=2))
         self.plots[1].setTitle("Line length of signal")
 
     def display_freqs_quantiles(self):
         self.plots[2].clear()
         for i in range(np.shape(self.C.freqs_quantiles)[0]):
-            self.plots[2].plot(self.C.t_list, self.C.freqs_quantiles[i, :], pen=pg.mkPen(self.colors[i], width=2))
+            self.plots[2].plot(self.C.t_list, savgol_filter(self.C.freqs_quantiles[i, :],3,1), pen=pg.mkPen(self.colors[i], width=2))
         self.plots[2].setTitle("Frequencies associated to quantiles")
         self.plots[2].setYRange(0, 30)
 
