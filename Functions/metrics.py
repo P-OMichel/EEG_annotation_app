@@ -7,9 +7,10 @@ from scipy.signal import welch
 
 def line_length(y):
 
-    return np.sum(np.abs(np.diff(y)))
+    res = np.sum(np.abs(np.diff(y)))
+    amp = np.sqrt(np.median(y **2))
 
-
+    return res/amp/ len(y)
 
 def freqs_quantiles(signal, sampling_rate, quantiles, nperseg):
     """
