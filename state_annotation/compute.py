@@ -20,7 +20,7 @@ class Compute:
 
     def get_power(self):
 
-        signals = get_filtered_signal(self.y, self.fs, [[0.1,4],[7,14],[15,30],[30,45]])
+        signals = get_filtered_signal(self.y, self.fs, [[0.5,4],[7,14],[15,30],[30,45]])
         self.t_list, self.P_signals = sliding.power_nD(signals, self.t, self.Ws, self.step)
 
     def get_power_prop(self):
@@ -48,6 +48,10 @@ class Compute:
 
         self.freqs_quantiles = sliding.compute_freqs_quantiles(self.y, self.t, self.Ws, self.step, self.fs)[-1]
 
+    def get_f_main(self):
+
+        self.f_central = sliding.compute_central_frequency(self.y, self.t, self.fs, self.Ws, self.step)[-1]
+
     def get_state(self):
 
         N = len(self.t_list)
@@ -64,4 +68,5 @@ class Compute:
         self.get_entropy()
         self.get_line_length()
         self.get_freqs_quantiles()
+        self.get_f_main()
         self.get_state()

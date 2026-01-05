@@ -226,6 +226,7 @@ class EEGViewer(QMainWindow):
             self.D_save = np.load(path_save, allow_pickle=True).item()
 
         self.data = np.load(path)
+        self.data = self.data[:-1]
         self.data = self.data - np.median(self.data)
         self.fs = self.fs_input.value()
         t = np.arange(len(self.data)) / self.fs
@@ -258,7 +259,7 @@ class EEGViewer(QMainWindow):
         img = pg.ImageItem(np.log(Sxx.T + 0.0000001))
 
         # Apply custom colormap
-        cmap = cm.get_cmap('rainbow')  # you can try 'plasma', 'inferno', etc.
+        cmap = cm.get_cmap('jet')  # you can try 'plasma', 'inferno', etc.
         lut = (cmap(np.linspace(0, 1, 256))[:, :3] * 255).astype(np.uint8)
         img.setLookupTable(lut)
         # fix range for values

@@ -1,50 +1,53 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-prop_delta = np.load('prop_delta.npy', allow_pickle=True).item()
+prop_delta = np.load('box_plot_data/prop_delta.npy', allow_pickle=True).item()
 prop_delta = [prop_delta[i] for i in range(22)]
-prop_alpha = np.load('prop_alpha.npy', allow_pickle=True).item()
+prop_alpha = np.load('box_plot_data/prop_alpha.npy', allow_pickle=True).item()
 prop_alpha = [prop_alpha[i] for i in range(22)]
-prop_beta = np.load('prop_beta.npy', allow_pickle=True).item()
+prop_beta = np.load('box_plot_data/prop_beta.npy', allow_pickle=True).item()
 prop_beta  = [prop_beta [i] for i in range(22)]
-prop_gamma = np.load('prop_gamma.npy', allow_pickle=True).item()
+prop_gamma = np.load('box_plot_data/prop_gamma.npy', allow_pickle=True).item()
 prop_gamma = [prop_gamma[i] for i in range(22)]
 
-alpha_delta = np.load('alpha_delta.npy', allow_pickle=True).item()
+alpha_delta = np.load('box_plot_data/alpha_delta.npy', allow_pickle=True).item()
 alpha_delta = [alpha_delta[i] for i in range(22)]
-beta_delta = np.load('beta_delta.npy', allow_pickle=True).item()
+beta_delta = np.load('box_plot_data/beta_delta.npy', allow_pickle=True).item()
 beta_delta = [beta_delta[i] for i in range(22)]
-gamma_delta = np.load('gamma_delta.npy', allow_pickle=True).item()
+gamma_delta = np.load('box_plot_data/gamma_delta.npy', allow_pickle=True).item()
 gamma_delta = [gamma_delta[i] for i in range(22)]
-beta_alpha = np.load('beta_alpha.npy', allow_pickle=True).item()
+beta_alpha = np.load('box_plot_data/beta_alpha.npy', allow_pickle=True).item()
 beta_alpha = [beta_alpha[i] for i in range(22)]
-gamma_alpha = np.load('gamma_alpha.npy', allow_pickle=True).item()
+gamma_alpha = np.load('box_plot_data/gamma_alpha.npy', allow_pickle=True).item()
 gamma_alpha = [gamma_alpha[i] for i in range(22)]
-gamma_beta = np.load('gamma_beta.npy', allow_pickle=True).item()
+gamma_beta = np.load('box_plot_data/gamma_beta.npy', allow_pickle=True).item()
 gamma_beta = [gamma_alpha[i] for i in range(22)]
-hf_lf = np.load('hf_lf.npy', allow_pickle=True).item()
+hf_lf = np.load('box_plot_data/hf_lf.npy', allow_pickle=True).item()
 hf_lf = [hf_lf[i] for i in range(22)]
 
-f_50_q = np.load('f_50_q.npy', allow_pickle=True).item()
+f_50_q = np.load('box_plot_data/f_50_q.npy', allow_pickle=True).item()
 f_50_q = [f_50_q[i] for i in range(22)]
-f_75_q = np.load('f_75_q.npy', allow_pickle=True).item()
+f_75_q = np.load('box_plot_data/f_75_q.npy', allow_pickle=True).item()
 f_75_q = [f_75_q[i] for i in range(22)]
-f_85_q = np.load('f_85_q.npy', allow_pickle=True).item()
+f_85_q = np.load('box_plot_data/f_85_q.npy', allow_pickle=True).item()
 f_85_q = [f_85_q[i] for i in range(22)]
-f_95_q = np.load('f_95_q.npy', allow_pickle=True).item()
+f_95_q = np.load('box_plot_data/f_95_q.npy', allow_pickle=True).item()
 f_95_q = [f_95_q[i] for i in range(22)]
 
-supp = np.load('supp.npy', allow_pickle=True).item()
+supp = np.load('box_plot_data/supp.npy', allow_pickle=True).item()
 supp = [supp[i] for i in range(22)]
 
-line_length = np.load('line_length.npy', allow_pickle=True).item()
+line_length = np.load('box_plot_data/line_length.npy', allow_pickle=True).item()
 line_length = [line_length[i] for i in range(22)]
 
-entropy = np.load('entropy.npy', allow_pickle=True).item()
+entropy = np.load('box_plot_data/entropy.npy', allow_pickle=True).item()
 entropy = [entropy[i] for i in range(22)]
 
-be = np.load('be.npy', allow_pickle=True).item()
+be = np.load('box_plot_data/be.npy', allow_pickle=True).item()
 be = [be[i] for i in range(22)]
+
+f_central = np.load('box_plot_data/f_central.npy', allow_pickle=True).item()
+f_central  = [f_central [i] for i in range(22)]
 
 fig, axes = plt.subplots(4)
 
@@ -80,7 +83,7 @@ axes[6].set_title('hf_lf')
 for i in range(7):
     axes[i].set_ylim(0,1)
 
-fig, axes = plt.subplots(4)
+fig, axes = plt.subplots(5)
 
 axes[0].boxplot(f_50_q, positions=range(22), patch_artist=True)
 axes[0].set_title('f_50_q')
@@ -90,6 +93,8 @@ axes[2].boxplot(f_50_q, positions=range(22), patch_artist=True)
 axes[2].set_title('f_85_q')
 axes[3].boxplot(f_95_q, positions=range(22), patch_artist=True)
 axes[3].set_title('f_95_q')
+axes[4].boxplot(f_central, positions=range(22), patch_artist=True)
+axes[4].set_title('f_central')
 
 for i in range(4):
     axes[i].set_ylim(0,20)

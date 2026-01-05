@@ -5,7 +5,7 @@ import numpy as np
 from Functions.suppressions import detect_suppressions_power
 from scipy.stats import entropy
 from collections import Counter
-from Functions.metrics import line_length, freqs_quantiles
+from Functions.metrics import line_length, freqs_quantiles, frequency_zcr
 
 
 #-------------------------------------------------------------------------------------------#
@@ -148,8 +148,18 @@ def compute_freqs_quantiles(signal, t, Ws, step, sampling_rate, quantiles=[0.5, 
     return t_list, np.transpose(freqs_list)
 
 
+#-------------------------------------------------------------------------------------------#
+#                                    central frequency                                      #
+#-------------------------------------------------------------------------------------------#
+def compute_central_frequency(signal, t, fs, Ws, step):
+    # create a list of all the sliding windows
+    windows=[signal[i : i + Ws] for i in range(0, len(signal) - Ws, step)]
+    # compute the line length in each window
+    central_f_list = np.array([frequency_zcr(win, fs) for win in windows])
+    # associated time list (time bin is for the end of a window)
+    t_list=[t[Ws + i * step] for i in range(len(windows))]
 
-
+    return t_list, central_f_list
 
 
 
