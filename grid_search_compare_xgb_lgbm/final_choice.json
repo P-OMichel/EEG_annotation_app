@@ -1,0 +1,21 @@
+{
+  "best_model": "lgbm",
+  "best_params": {
+    "num_leaves": 63,
+    "min_child_samples": 50,
+    "lambda_l2": 5.0
+  },
+  "test_metrics": {
+    "balanced_accuracy": 0.708670380169477,
+    "macro_f1": 0.7048989515633016
+  },
+  "classes": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+  ]
+}
